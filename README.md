@@ -1,5 +1,7 @@
 # dsh-obvious-grid
 
+**npm**: [dsh-obvious-grid](https://www.npmjs.com/package/dsh-obvious-grid) · **source**: [github.com/ray062/dsh-obvious-grid](https://github.com/ray062/dsh-obvious-grid)
+
 Host plugin for DeepSeek Harness: makes session status **obvious** — visible from
 across the room and reaching you when you are AFK. Port of the *idea* of
 [opencode-obvious-grid](https://github.com/ray062/opencode-obvious-grid) (its "HOW":
