@@ -51,42 +51,39 @@ onto DSH's own seams instead of opencode hooks + temp files.
 
 ## Install
 
-1. Make the plugin resolvable in your `web` profile and install the one runtime
-   peer (schemastery):
-
 ```bash
 dsh plugin --profile web add dsh-obvious-grid
 dsh plugin --profile web add @deepseek-ai/schemastery
+dsh web   # restart, then open http://localhost:3080/obvious-grid
 ```
 
-   (`dsh plugin` forwards pnpm; before publishing — or for local development — a
-   tarball or `file:` path works the same way, e.g.
-   `dsh plugin --profile web add file:/path/to/dsh-obvious-grid`.)
+That's it — the package ships a `dsh.bundle` manifest (its own
+`cordis.patch.yml`), so `dsh plugin add` registers the plugin as a profile
+layer automatically: no manual patch editing, no config file. (`dsh plugin`
+forwards pnpm; for local development a tarball or `file:` path works the same
+way, e.g. `dsh plugin --profile web add file:/path/to/dsh-obvious-grid`.)
 
-2. Register the plugin via an `insert` list in the profile's own patch layer
-   `$DSH_HOME/profiles/web/cordis.patch.yml` (or the home-level
-   `$DSH_HOME/cordis.patch.yml` for every profile). The patch layer is
-   **id-targeted** — plain `- id: ... / name: ...` rows only override existing
-   entries, so a new plugin must come in as an `insert` (no `id` on the patch
-   pushes it onto the root entry list):
+### User-specific config (optional)
+
+Per-user settings — your ntfy `topic`, `alarmCmd`, push defaults — belong in
+the profile's own patch layer `$DSH_HOME/profiles/web/cordis.patch.yml` as an
+**id-targeted** override (only the keys you set are needed):
 
 ```yaml
-- insert:
-    - id: obvious-grid
-      name: dsh-obvious-grid
-      inject: [sessions, webServer, sessionTitle]   # cordis services this plugin touches
-      config:
-        topic: my-dsh-alerts        # ntfy topic; push is off until set
-        notifyOn: [turn-end, error, approval-wait]
-        notifyDefault: false        # true = notify all sessions unless overridden
-        alarmCmd: ""                # e.g. paplay /usr/share/sounds/freedesktop/stereo/complete.oga
-        minIntervalMs: 5000         # max one push per session per interval
-        ntfyUrl: https://ntfy.sh
-        pageEnabled: true
+- id: obvious-grid
+  config:
+    topic: my-dsh-alerts        # ntfy topic; push is off until set
+    notifyOn: [turn-end, error, approval-wait]
+    notifyDefault: false        # true = notify all sessions unless overridden
+    alarmCmd: ""                # e.g. paplay /usr/share/sounds/freedesktop/stereo/complete.oga
+    minIntervalMs: 5000         # max one push per session per interval
+    ntfyUrl: https://ntfy.sh
+    pageEnabled: true
 ```
 
-3. Restart: `dsh web`, then open `http://localhost:3080/obvious-grid` (the port
-   your instance binds).
+> Note for setups from before v0.2.0: if you previously registered the plugin by
+> hand via an `insert` row in your profile patch, remove that row after
+> upgrading to the bundle install — otherwise the plugin is registered twice.
 
 ## Config
 
@@ -121,6 +118,8 @@ dsh-obvious-grid/
   lib/sessions.js    live per-session fold of the session firehose
   lib/notify.js      ntfy push + bounded alarm subprocess + user config store
   lib/page.html      the ambient grid page (plain file, no template processing)
+  cordis.patch.yml   bundle patch layer (dsh.bundle manifest) — auto-registers the
+                     plugin on `dsh plugin add`, no manual patch editing
   scripts/check-page-script.mjs  syntax-checks the page's embedded <script>
   scripts/seeder.mjs            test seeder: creates a multi-session grid (parent +
                                 sub-agent + extra session) in an isolated profile to

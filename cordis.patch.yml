@@ -1,0 +1,10 @@
+# Bundle patch layer for dsh-obvious-grid.
+# Applied automatically when the package is installed via
+# `dsh plugin --profile <name> add dsh-obvious-grid` (the package declares
+# `dsh.bundle.patch` in package.json, which joins the profile's bundle stack).
+# User-specific config (ntfy topic, alarm command, ...) belongs in the
+# profile's own cordis.patch.yml as an id-targeted override, not here.
+- insert:
+    - id: obvious-grid
+      name: dsh-obvious-grid
+      inject: [sessions, webServer, sessionTitle]

@@ -1,6 +1,6 @@
 {
   "name": "dsh-obvious-grid",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Host plugin for DeepSeek Harness: ambient status grid page + AFK notifications (ntfy push / alarm) on turn-end, error, and approval-wait. The \"obvious\" idea from opencode-obvious-grid, on DSH seams.",
   "repository": {
     "type": "git",
@@ -12,10 +12,14 @@
   "exports": {
     ".": "./lib/index.js"
   },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" }
+  },
   "files": [
     "lib",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    "cordis.patch.yml"
   ],
   "scripts": {
     "check": "node --check lib/index.js && node --check lib/sessions.js && node --check lib/notify.js && node scripts/check-page-script.mjs"
@@ -23,6 +27,7 @@
   "keywords": [
     "deepseek-harness",
     "dsh",
+    "dsh-plugin",
     "plugin",
     "status",
     "dashboard",
