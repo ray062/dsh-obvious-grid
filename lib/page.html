@@ -509,7 +509,7 @@
         '<div class="cpath" data-hint="working directory · git branch"></div>' +
         '<div class="sess" data-hint="session title — what this harness session is working on"></div>' +
       "</div>" +
-      '<div class="status" data-hint="session state: RUNNING = a step is executing · IDLE = resting (waiting for you or a new turn) · WAITING = blocked on your approval · ERROR = agent failed"></div>' +
+      '<div class="status" data-hint="session state: RUNNING = a turn is executing (steps, tool calls, compaction) · IDLE = resting (waiting for you or a new turn) · WAITING = blocked on your approval · ERROR = agent failed"></div>' +
       '<div class="marquee">' + marqueeRows() + "</div>" +
       '<div class="stats" data-line="1"></div>' +
       '<div class="stats" data-line="2"></div>' +
@@ -757,11 +757,12 @@
     if (idleMs >= 1000) parts.push("idle " + fmtDur(idleMs));
     if (errMs >= 1000) parts.push("err " + fmtDur(errMs));
     var openMs = (i.sessionStart ? now - i.sessionStart : 0);
-    var meta = "dsh v" + (i.version || "0.2.1")
+    var meta = "dsh v" + (i.version || "0.2.2")
       + (i.pid ? " · pid " + i.pid : "")
       + " · " + (i.sessionID ? i.sessionID.replace(/^session-/, "").slice(0, 8) : "")
       + " · open " + fmtDur(openMs) + (parts.length ? " (" + parts.join(" · ") + ")" : "")
       + " · llm " + fmtDur(i.llmMs)
+      + (i.compacting ? " · compacting" : "")
       + " · started " + fmtClock(i.sessionStart);
     el.querySelector(".meta").textContent = meta;
   }

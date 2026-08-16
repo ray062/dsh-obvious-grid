@@ -31,6 +31,11 @@ onto DSH's own seams instead of opencode hooks + temp files.
   stacked bars + token/s rate and average lines, hover for per-request detail
   with cumulative totals).
   Zero interaction required; the page polls `/obvious-grid/status` and stays live.
+  The state follows the session’s *open turn*: **running** covers the whole
+  turn — each step, the gaps between steps (tool calls), and compaction
+  (`compaction/start`..`compaction/end`) included — so the grid never flickers
+  to idle between steps, and a manual `/compact` between turns shows as running
+  while the summary is being produced. **Idle** only when no turn is open.
 - **AFK notifications** on exactly three triggers (obvious-grid semantics):
   - `turn-end` — a turn finished, come look;
   - `error` — `agent/error` on the live bus;
