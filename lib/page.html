@@ -757,7 +757,7 @@
     if (idleMs >= 1000) parts.push("idle " + fmtDur(idleMs));
     if (errMs >= 1000) parts.push("err " + fmtDur(errMs));
     var openMs = (i.sessionStart ? now - i.sessionStart : 0);
-    var meta = "dsh v" + (i.version || "0.1.0")
+    var meta = "dsh v" + (i.version || "0.2.0")
       + (i.pid ? " · pid " + i.pid : "")
       + " · " + (i.sessionID ? i.sessionID.replace(/^session-/, "").slice(0, 8) : "")
       + " · open " + fmtDur(openMs) + (parts.length ? " (" + parts.join(" · ") + ")" : "")
