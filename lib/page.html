@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>obvious grid</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; overflow: hidden; }
+  body { font-family: system-ui, sans-serif; color: #fff; background: #111; }
+  .grid {
+    display: flex; flex-wrap: wrap; align-content: stretch;
+    width: 100vw; height: 100vh;
+    gap: 4px; padding: 4px;
+  }
+  .card {
+    container-type: size;
+    position: relative; isolation: isolate;
+    flex: 1 1 auto; min-width: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 1.2cqh; padding: 0 2cqw 2cqw; border-radius: 8px; text-align: center;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.35);
+    overflow: hidden;
+  }
+  .card.running .status { display: none; }
+  .card.running .marquee {
+    position: absolute; inset: 0; display: flex; flex-direction: column;
+    justify-content: center; align-items: flex-start; overflow: hidden; pointer-events: none;
+  }
+  .card.running .marq-row {
+    white-space: nowrap; font-weight: 800; letter-spacing: 0.06em; line-height: 1;
+    font-size: min(10cqw, 10cqh); opacity: 0.16; will-change: transform;
+    width: max-content;
+  }
+  .card.running .marq-row.dir-l { animation: marqLeft 60s linear infinite; }
+  .card.running .marq-row.dir-r { animation: marqRight 60s linear infinite; }
+  @keyframes marqLeft  { from { transform: translateX(0); }      to { transform: translateX(-50%); } }
+  @keyframes marqRight { from { transform: translateX(-50%); }   to { transform: translateX(0); } }
+  .card:not(.running) .marquee { display: none; }
+  .card.waiting { position: relative; animation: attention 1s ease-in-out infinite; }
+  .card.waiting::before {
+    content: "";
+    position: absolute; inset: 0; border-radius: 8px;
+    background: rgba(255,255,255,0);
+    animation: alertFlash 1s ease-in-out infinite;
+    pointer-events: none;
+  }
+  .card.waiting .status { animation: statusBlink 1s steps(2, jump-none) infinite; }
+  @keyframes attention {
+    0%, 100% { filter: brightness(1); }
+    50%      { filter: brightness(1.25); }
+  }
+  @keyframes alertFlash {
+    0%, 100% { background: rgba(255,255,255,0); }
+    50%      { background: rgba(255,255,255,0.18); }
+  }
+  @keyframes statusBlink {
+    0% { opacity: 1; }
+    100% { opacity: 0.35; }
+  }
+  .status { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+            font-size: 10cqw; font-weight: 800; letter-spacing: 0.06em; line-height: 1;
+            z-index: -1; pointer-events: none; opacity: 0.14; }
+  .sess { font-size: 5cqw; width: 100%; white-space: nowrap; overflow: hidden;
+          text-overflow: ellipsis; opacity: 0.95; }
+  .parent { font-size: 2.4cqw; width: 100%; white-space: nowrap; overflow: hidden;
+            text-overflow: ellipsis; opacity: 0.7; }
+  .meta, .cpath { font-size: 1.5cqw; font-family: monospace; opacity: 0.5; width: 100%;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head { display: flex; flex-direction: column; align-items: center; width: 100%; }
+  .sound-toggle { margin-top: auto; font-size: 2cqw; font-family: monospace;
+                  background: rgba(0,0,0,0.28); padding: 0.4cqh 1.2cqw;
+                  border-radius: 2cqw; display: inline-flex; align-items: center;
+                  gap: 0.8cqw; user-select: none; white-space: nowrap; }
+  .sound-toggle label { display: inline-flex; align-items: center; gap: 0.5cqw;
+                        cursor: pointer; }
+  .sound-toggle input { accent-color: #fff; width: 1.6cqw; height: 1.6cqh; margin: 0;
+                        cursor: pointer; }
+  .close {
+    position: absolute; top: 8px; right: 10px; z-index: 2;
+    width: 24px; height: 24px;
+    border: none; border-radius: 50%; cursor: pointer;
+    background: rgba(0,0,0,0.35); color: #fff; font-size: 16px; line-height: 1;
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0.5; transition: opacity 0.15s;
+  }
+  .close:hover { opacity: 1; background: rgba(0,0,0,0.6); }
+  #restore {
+    position: fixed; top: 10px; left: 10px; z-index: 900; display: none;
+    background: rgba(15,15,15,0.9); color: #ddd; font-size: 12px;
+    font-family: system-ui, sans-serif; padding: 6px 10px; border-radius: 14px;
+    border: 1px solid rgba(255,255,255,0.25); cursor: pointer; user-select: none;
+  }
+  #restore:hover { color: #fff; border-color: rgba(255,255,255,0.5); }
+  #ntfybar {
+    position: fixed; bottom: 10px; right: 10px; z-index: 900; display: flex;
+    align-items: center; gap: 6px; background: rgba(15,15,15,0.9);
+    color: #999; font-size: 12px; font-family: system-ui, sans-serif;
+    padding: 4px 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.25);
+  }
+  #ntfybar input {
+    background: transparent; border: none; outline: none; color: #eee;
+    font-size: 12px; font-family: monospace; width: 150px;
+  }
+  #ntfybar input::placeholder { color: #666; }
+  #links {
+    position: fixed; bottom: 10px; left: 10px; z-index: 900; display: flex;
+    align-items: center; gap: 6px; background: rgba(15,15,15,0.9);
+    padding: 4px 8px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.25);
+  }
+  #links a { display: flex; align-items: center; opacity: 0.55; transition: opacity 0.15s; }
+  #links a:hover { opacity: 1; }
+  #links svg { width: 18px; height: 18px; fill: #ddd; }
+  #notifyHelp {
+    position: fixed; inset: 0; z-index: 2000; display: none;
+    align-items: center; justify-content: center; background: rgba(0,0,0,0.55);
+  }
+  #notifyHelp .box {
+    max-width: 430px; margin: 0 16px; background: rgba(22,22,22,0.98); color: #eee;
+    border: 1px solid rgba(255,255,255,0.25); border-radius: 10px; padding: 18px 20px;
+    font-family: system-ui, sans-serif; font-size: 13.5px; line-height: 1.6;
+  }
+  #notifyHelp h3 { margin: 0 0 10px; font-size: 16px; color: #fff; }
+  #notifyHelp code { font-family: monospace; background: rgba(255,255,255,0.1); padding: 1px 5px; border-radius: 4px; }
+  #notifyHelp .row { display: flex; align-items: center; gap: 10px; margin-top: 14px; }
+  #notifyHelp .row label { display: flex; align-items: center; gap: 6px; font-size: 13px; cursor: pointer; }
+  #notifyHelp button {
+    margin-left: auto; background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.3);
+    border-radius: 14px; padding: 5px 16px; font-size: 13px; cursor: pointer;
+  }
+  #notifyHelp button:hover { background: rgba(255,255,255,0.22); }
+  .stats { display: flex; flex-wrap: wrap; gap: 0.8cqw 1.2cqw; justify-content: center; margin-top: 1cqh; }
+  .stats + .stats { margin-top: 0.3cqh; }
+  .graphs { display: none; flex-direction: column; width: 100%; min-height: 0; }
+  .graph { flex: 1 1 0; width: 100%; min-height: 0; }
+  .graph svg { display: block; width: 100%; height: 100%; }
+  @container (min-width: 900px) {
+    .graphs { flex-direction: row; }
+  }
+  .chip { font-size: 2.2cqw; background: rgba(0,0,0,0.28); padding: 0.5cqh 1.4cqw;
+          border-radius: 2cqw; font-family: monospace; white-space: nowrap; }
+  .message { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+             font-size: 5vw; opacity: 0.6; }
+  #hint, #graphTip {
+    position: fixed; z-index: 1000; display: none; pointer-events: none;
+    max-width: 340px; padding: 8px 11px; border-radius: 6px;
+    background: rgba(15,15,15,0.96); color: #eee; font-size: 13px;
+    line-height: 1.5; font-family: system-ui, sans-serif;
+    border: 1px solid rgba(255,255,255,0.22); box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    white-space: pre-line;
+  }
+</style>
+</head>
+<body>
+<div class="grid" id="grid"></div>
+<div id="restore"></div>
+<div id="ntfybar" data-hint="ntfy.sh topic for push notifications — saved automatically; e.g. my-dsh-alerts"><span>ntfy</span><input id="ntfyTopic" placeholder="topic"></div>
+<div id="links">
+  <a href="https://github.com/ray062/opencode-obvious-grid" target="_blank" rel="noopener" title="UI idea from opencode-obvious-grid">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+  </a>
+</div>
+<div id="notifyHelp">
+  <div class="box">
+    <h3>How notifications work</h3>
+    <div>
+      The <b>notify</b> checkbox turns on push notifications for <b>this session only</b> —
+      you'll get a message when it turns idle (finished), errors, or asks for your permission.
+      Alarm sound on this machine is configured with <code>alarmCmd</code>.
+    </div>
+    <div style="margin-top:8px">
+      <b>1.</b> Type a topic in the <b>ntfy</b> field at the bottom right, e.g.
+      <code>my-dsh-alerts</code> (a long random name keeps it private). It's global —
+      one target for all sessions.
+    </div>
+    <div style="margin-top:8px">
+      <b>2.</b> Install the <b>ntfy</b> app on your phone and subscribe to that topic —
+      subscribing is what creates it.
+    </div>
+    <div class="row">
+      <label><input type="checkbox" id="notifyHelpDont"> don't show again</label>
+      <button id="notifyHelpOk">OK</button>
+    </div>
+  </div>
+</div>
+<script>
+(function () {
+  "use strict";
+  var colors = { running: "#ff9500", error: "#ff3b30", waiting: "#3b82f6", idle: "#34c759", unknown: "#555" };
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+  }
+  function gridCols(n) {
+    if (n <= 1) return 1;
+    if (n === 2) return 2;
+    return Math.ceil(Math.sqrt(n));
+  }
+  function fmt(n) {
+    if (!n) return "0";
+    if (n >= 1e6) return (n / 1e6).toFixed(2) + "M";
+    if (n >= 1e3) return (n / 1e3).toFixed(1) + "k";
+    return String(n);
+  }
+  function fmtInt(n) {
+    if (!n) return "0";
+    if (n >= 1e9) return Math.round(n / 1e9) + "G";
+    if (n >= 1e6) return Math.round(n / 1e6) + "M";
+    if (n >= 1e3) return Math.round(n / 1e3) + "k";
+    return String(Math.round(n));
+  }
+  function fmtDur(ms) {
+    if (ms == null) return "";
+    var s = Math.max(0, Math.floor(ms / 1000));
+    if (s < 60) return s + "s";
+    var m = Math.floor(s / 60);
+    if (m < 60) return m + "m";
+    var h = Math.floor(m / 60);
+    if (h < 24) return h + "h" + (m % 60 ? " " + (m % 60) + "m" : "");
+    return Math.floor(h / 24) + "d " + (h % 24) + "h";
+  }
+  function fmtClock(ts) {
+    if (!ts) return "";
+    var d = new Date(ts);
+    var hh = String(d.getHours()).padStart(2, "0");
+    var mm = String(d.getMinutes()).padStart(2, "0");
+    var same = d.toDateString() === new Date().toDateString();
+    return (same ? "" : (d.getMonth() + 1) + "/" + d.getDate() + " ") + hh + ":" + mm;
+  }
+  function chip(inner, hint) {
+    return '<span class="chip"' + (hint ? ' data-hint="' + esc(hint) + '"' : "") + ">" + inner + "</span>";
+  }
+  function drawGraph(container, series) {
+    var width = container.clientWidth;
+    var height = container.clientHeight;
+    if (!width || !height) return;
+    var pad = 3;
+    var n = series.length;
+    var cumToks = 0;
+    var cumDur = 0;
+    var ratePts = [];
+    var avgPts = [];
+    for (var g = 0; g < n; g++) {
+      var t = series[g][0];
+      var toks = series[g][1];
+      var dur = series[g][2];
+      var rate = toks > 0 && dur > 0 ? (toks / dur) * 1000 : 0;
+      cumToks += toks;
+      cumDur += dur;
+      ratePts.push([t, rate]);
+      avgPts.push([t, cumDur > 0 ? (cumToks / cumDur) * 1000 : 0]);
+    }
+    var rates = ratePts.map(function (p) { return p[1]; }).sort(function (a, b) { return a - b; });
+    var p95 = rates[Math.floor(rates.length * 0.95)] || 1;
+    var lastAvg = avgPts.length ? avgPts[avgPts.length - 1][1] : 0;
+    var maxY = Math.max(p95 * 1.2, lastAvg * 1.2, 1);
+    function X(i2) { return n > 1 ? pad + (i2 / (n - 1)) * (width - pad * 2) : pad + width / 2; }
+    function Y(r) { return height - pad - (Math.min(r, maxY) / maxY) * (height - pad * 2); }
+    function pts(arr) {
+      var out = [];
+      for (var k = 0; k < arr.length; k++) out.push(X(k).toFixed(1) + "," + Y(arr[k][1]).toFixed(1));
+      return out.join(" ");
+    }
+    container.__rate = ratePts;
+    container.__avg = avgPts;
+    container.__t = ratePts.map(function (p) { return p[0]; });
+    var svg = '<svg viewBox="0 0 ' + width + " " + height + '">';
+    svg += '<polyline points="' + pts(ratePts) + '" fill="none" stroke="rgba(255,255,255,0.4)" stroke-width="1.5"/>';
+    svg += '<polyline points="' + pts(avgPts) + '" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="2.5"/>';
+    svg += "</svg>";
+    container.innerHTML = svg;
+  }
+  function drawTokGraph(container, series) {
+    var width = container.clientWidth;
+    var height = container.clientHeight;
+    if (!width || !height) return;
+    var pad = 3;
+    var n = series.length;
+    var maxTotal = 1;
+    for (var a = 0; a < n; a++) {
+      var s = series[a];
+      maxTotal = Math.max(maxTotal, s[1] + s[2] + s[3], s[4]);
+    }
+    var mid = height / 2;
+    var scale = Math.max(1, mid - pad) / maxTotal;
+    var slot = width / n;
+    var bw = Math.max(2, slot * 0.55);
+    var svg = '<svg viewBox="0 0 ' + width + " " + height + '">';
+    svg += '<line x1="0" y1="' + mid.toFixed(1) + '" x2="' + width + '" y2="' + mid.toFixed(1) +
+      '" stroke="rgba(255,255,255,0.25)" stroke-width="1"/>';
+    var segColors = ["rgba(255,255,255,0.85)", "#ff9500", "#a78bfa"];
+    for (var b = 0; b < n; b++) {
+      var p = series[b];
+      var x = pad + b * slot + (slot - bw) / 2;
+      var y = mid;
+      var segs = [
+        [p[1], segColors[0]],
+        [p[2], segColors[1]],
+        [p[3], segColors[2]],
+      ];
+      for (var c = 0; c < segs.length; c++) {
+        var v = segs[c][0];
+        if (!(v > 0)) continue;
+        var h = Math.max(1, v * scale);
+        var y0 = y - h;
+        svg += '<rect x="' + x.toFixed(1) + '" y="' + y0.toFixed(1) + '" width="' + bw.toFixed(1) +
+          '" height="' + h.toFixed(1) + '" fill="' + segs[c][1] + '"/>';
+        y = y0;
+      }
+      if (p[4] > 0) {
+        var ch = Math.max(1, p[4] * scale);
+        svg += '<rect x="' + x.toFixed(1) + '" y="' + mid.toFixed(1) + '" width="' + bw.toFixed(1) +
+          '" height="' + ch.toFixed(1) + '" fill="#3b82f6"/>';
+      }
+    }
+    var cum = [[], [], [], []];
+    if (n >= 2 && width >= 420) {
+      var last = [0, 0, 0, 0];
+      for (var d = 0; d < n; d++) {
+        last[0] += series[d][1];
+        last[1] += series[d][4];
+        last[2] += series[d][2];
+        last[3] += series[d][3];
+        cum[0].push(last[0]);
+        cum[1].push(last[1]);
+        cum[2].push(last[2]);
+        cum[3].push(last[3]);
+      }
+      var maxRight = Math.max(cum[0][n - 1], cum[1][n - 1], cum[2][n - 1], cum[3][n - 1], 1);
+      function RY(v2) { return pad + (1 - v2 / maxRight) * (height - pad * 2); }
+      function linePts(arr) {
+        var out = [];
+        for (var e = 0; e < arr.length; e++) {
+          out.push((pad + e * slot + slot / 2).toFixed(1) + "," + RY(arr[e]).toFixed(1));
+        }
+        return out.join(" ");
+      }
+      var lc = ["rgba(255,255,255,0.9)", "#3b82f6", "#ff9500", "#a78bfa"];
+      for (var f = 0; f < 4; f++) {
+        svg += '<polyline points="' + linePts(cum[f]) + '" fill="none" stroke="' + lc[f] + '" stroke-width="1.5"/>';
+      }
+      svg += '<line x1="' + (width - 1).toFixed(1) + '" y1="' + pad + '" x2="' + (width - 1).toFixed(1) +
+        '" y2="' + (height - pad).toFixed(1) + '" stroke="rgba(255,255,255,0.35)" stroke-width="1"/>';
+      var labels = [maxRight, maxRight / 2, 0];
+      for (var g2 = 0; g2 < labels.length; g2++) {
+        var lv = labels[g2];
+        svg += '<text x="' + (width - 5).toFixed(1) + '" y="' + Math.min(height - 2, RY(lv) + 3.5).toFixed(1) +
+          '" text-anchor="end" font-family="monospace" font-size="10" fill="rgba(255,255,255,0.55)">' +
+          fmt(lv) + "</text>";
+      }
+    }
+    svg += "</svg>";
+    /* Hover data for the token graph, exactly like the original: the page reads
+       __tok/__cum/__t in onGraphMove to build the per-request hint. Without
+       these the token graph has no mouseover tooltip. */
+    container.__tok = series;
+    container.__cum = cum;
+    container.__t = series.map(function (pt) { return pt[0]; });
+    container.innerHTML = svg;
+  }
+  function onGraphMove(e) {
+    var el = e.currentTarget;
+    var tok = el.__tok;
+    var rate = el.__rate;
+    var n = tok ? tok.length : rate ? rate.length : 0;
+    if (!n) return;
+    var rect = el.getBoundingClientRect();
+    var idx = Math.max(0, Math.min(n - 1,
+      Math.round(((e.clientX - rect.left - 3) / Math.max(1, rect.width - 6)) * (n - 1))));
+    var t = el.__t ? new Date(el.__t[idx]) : null;
+    var hh = t ? String(t.getHours()).padStart(2, "0") : "--";
+    var mm = t ? String(t.getMinutes()).padStart(2, "0") : "--";
+    if (tok) {
+      var p = tok[idx];
+      var txt = "req " + (idx + 1) + " · " + hh + ":" + mm +
+        " · in " + fmt(p[1]) + " · out " + fmt(p[2]) +
+        " · reas " + fmt(p[3]) + " · cache " + fmt(p[4]);
+      var cum2 = el.__cum;
+      if (cum2 && cum2[0] && cum2[0].length) {
+        txt += "\ncum in " + fmt(cum2[0][idx]) + " · hit " + fmt(cum2[1][idx]) +
+          " · out " + fmt(cum2[2][idx]) + " · reas " + fmt(cum2[3][idx]);
+      }
+      graphTip.textContent = txt;
+    } else {
+      graphTip.textContent = "req " + (idx + 1) + " · " + hh + ":" + mm +
+        " · " + Math.round(rate[idx][1]) + " t/s · avg " + Math.round(el.__avg[idx][1]) + "/s";
+    }
+    graphTip.style.display = "block";
+    var r = graphTip.getBoundingClientRect();
+    var pad = 10;
+    var left = e.clientX + pad;
+    var top = e.clientY + pad;
+    if (left + r.width > innerWidth - pad) left = e.clientX - r.width - pad;
+    if (top + r.height > innerHeight - pad) top = e.clientY - r.height - pad;
+    graphTip.style.left = Math.max(pad, left) + "px";
+    graphTip.style.top = Math.max(pad, top) + "px";
+  }
+  var cardEls = new Map();
+  var prevStates = new Map();
+  var soundEnabled = new Map();
+  var waitTimers = new Map();
+  var pendingSounds = new Map();
+  var instancesBySid = new Map();
+  var notifyCfg = null;
+  var hiddenKeys = new Set();
+  try {
+    hiddenKeys = new Set(JSON.parse(localStorage.getItem("sp-hidden") || "[]"));
+  } catch (e) {}
+  var audioCtx = null;
+  function ensureAudio() {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) audioCtx = new AC();
+    }
+    if (audioCtx && audioCtx.state === "suspended") audioCtx.resume();
+    return audioCtx;
+  }
+  function beep(freq, dur, delay, vol) {
+    var ctx = ensureAudio();
+    if (!ctx) return;
+    var t = ctx.currentTime + (delay || 0);
+    var master = ctx.createGain();
+    master.gain.value = 1.2;
+    master.connect(ctx.destination);
+    var freqs = [freq, freq * 2];
+    var oscs = [];
+    for (var k = 0; k < 2; k++) {
+      var osc = ctx.createOscillator();
+      var gain = ctx.createGain();
+      osc.type = k === 0 ? "square" : "triangle";
+      osc.frequency.value = freqs[k];
+      var g = k === 0 ? (vol || 0.5) : (vol || 0.5) * 0.25;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(g, t + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(gain).connect(master);
+      osc.start(t);
+      osc.stop(t + dur + 0.05);
+      oscs.push(osc);
+    }
+    oscs[oscs.length - 1].onended = function () { master.disconnect(); };
+  }
+  function playIdleSound() {
+    beep(659.3, 0.12, 0, 0.55);
+    beep(987.8, 0.4, 0.16, 0.6);
+  }
+  function playWaitSound() {
+    beep(523.3, 0.18, 0, 0.6);
+    beep(523.3, 0.18, 0.22, 0.6);
+  }
+  function startWaitLoop(sid) {
+    if (waitTimers.has(sid)) return;
+    playWaitSound();
+    waitTimers.set(sid, setInterval(playWaitSound, 10000));
+  }
+  function stopWaitLoop(sid) {
+    var t = waitTimers.get(sid);
+    if (t) {
+      clearInterval(t);
+      waitTimers.delete(sid);
+    }
+  }
+  var MARQ_WORD = "RUNNING ";
+  function marqueeRows() {
+    var rows = "";
+    for (var r = 0; r < 8; r++) {
+      var dir = r % 2 ? "dir-r" : "dir-l";
+      rows += '<div class="marq-row ' + dir + '">' + MARQ_WORD.repeat(20) + "</div>";
+    }
+    return rows;
+  }
+  function padRow(row, mq) {
+    var guard = 0;
+    while (row.scrollWidth < mq.clientWidth * 2 && guard++ < 200) {
+      row.insertAdjacentText("beforeend", MARQ_WORD.repeat(2));
+    }
+  }
+  function ensureMarquee(el) {
+    var mq = el.querySelector(".marquee");
+    if (!mq) return;
+    if (!el.dataset.marqFilled) {
+      el.dataset.marqFilled = "1";
+      var rows = mq.querySelectorAll(".marq-row");
+      for (var i = 0; i < rows.length; i++) padRow(rows[i], mq);
+      var guard = 0;
+      while (mq.scrollHeight < mq.clientHeight && guard++ < 60) {
+        var dir = mq.children.length % 2 ? "dir-r" : "dir-l";
+        var row = document.createElement("div");
+        row.className = "marq-row " + dir;
+        row.textContent = MARQ_WORD.repeat(20);
+        mq.appendChild(row);
+        padRow(row, mq);
+      }
+    }
+  }
+  function isHideable(state) {
+    return state === "idle" || state === "error" || state === "unknown";
+  }
+  function notifyChecked(sid) {
+    if (!notifyCfg) return false;
+    if (notifyCfg.sessions && notifyCfg.sessions[sid] !== undefined) return !!notifyCfg.sessions[sid];
+    return !!notifyCfg.notifyDefault;
+  }
+  function makeCard(i) {
+    var sid = i.sessionID || "";
+    var el = document.createElement("div");
+    el.className = "card";
+    el.innerHTML =
+      '<div class="head">' +
+        '<div class="cpath" data-hint="working directory · git branch"></div>' +
+        '<div class="sess" data-hint="session title — what this harness session is working on"></div>' +
+      "</div>" +
+      '<div class="status" data-hint="session state: RUNNING = a step is executing · IDLE = resting (waiting for you or a new turn) · WAITING = blocked on your approval · ERROR = agent failed"></div>' +
+      '<div class="marquee">' + marqueeRows() + "</div>" +
+      '<div class="stats" data-line="1"></div>' +
+      '<div class="stats" data-line="2"></div>' +
+      '<div class="graphs">' +
+        '<div class="graph graph-tok"></div>' +
+        '<div class="graph graph-rate"></div>' +
+      "</div>" +
+      '<div class="sound-toggle">' +
+        '<label data-hint="play a sound when this session finishes (idle) or is waiting"><input type="checkbox" class="sound-box"> sound</label>' +
+        '<label data-hint="send a push when this session goes idle, errors, or asks for approval"><input type="checkbox" class="notify-box"> notify</label>' +
+      "</div>" +
+      '<button class="close" data-hint="hide this card — stays hidden while idle or errored, reappears if active again">×</button>' +
+      '<div class="meta" data-hint="plugin version · session id · time since the session opened · accumulated model time · session started time; live run/wait/idle/error times reset on each state change"></div>';
+    var box = el.querySelector(".sound-box");
+    var saved = localStorage.getItem("sp-sound-" + sid);
+    box.checked = saved != null ? saved === "1" : localStorage.getItem("sp-sound-default") === "1";
+    soundEnabled.set(sid, box.checked);
+    box.addEventListener("change", function () {
+      soundEnabled.set(sid, box.checked);
+      localStorage.setItem("sp-sound-" + sid, box.checked ? "1" : "0");
+      localStorage.setItem("sp-sound-default", box.checked ? "1" : "0");
+      if (box.checked) ensureAudio();
+      if (!box.checked) {
+        stopWaitLoop(sid);
+        pendingSounds.delete(sid);
+      }
+    });
+    var nbox = el.querySelector(".notify-box");
+    nbox.checked = notifyChecked(sid);
+    if (i.parentID) nbox.parentElement.style.display = "none";
+    nbox.addEventListener("change", function () {
+      fetch("/obvious-grid/notify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionID: sid, enabled: nbox.checked }),
+      }).catch(function () {});
+      if (nbox.checked && !localStorage.getItem("sp-notify-helped")) showNotifyHelp();
+    });
+    var cbtn = el.querySelector(".close");
+    cbtn.style.display = isHideable(i.state) ? "flex" : "none";
+    cbtn.addEventListener("click", function () { hideCard(sid); });
+    var graphEls = el.querySelector(".graphs").querySelectorAll(".graph");
+    for (var gi = 0; gi < graphEls.length; gi++) {
+      graphEls[gi].addEventListener("mousemove", onGraphMove);
+      graphEls[gi].addEventListener("mouseleave", function () { graphTip.style.display = "none"; });
+    }
+    cardEls.set(sid, el);
+    return el;
+  }
+  function short(s, n) {
+    s = String(s == null ? "" : s);
+    return s.length > n ? s.slice(0, n) + "…" : s;
+  }
+  function updateCard(i) {
+    var sid = i.sessionID || "";
+    var el = cardEls.get(sid);
+    var prev = prevStates.get(sid) || null;
+    prevStates.set(sid, i.state);
+    if (soundEnabled.get(sid)) {
+      if (prev === "running" && i.state === "idle") {
+        if (document.hidden) pendingSounds.set(sid, "idle");
+        else playIdleSound();
+      } else if (prev === "running" && i.state === "waiting") {
+        if (document.hidden) pendingSounds.set(sid, "waiting");
+        else startWaitLoop(sid);
+      }
+    }
+    if (i.state !== "waiting") {
+      stopWaitLoop(sid);
+      pendingSounds.delete(sid);
+    }
+    var c = colors[i.state] || colors.unknown;
+    el.style.background = "linear-gradient(rgba(0,0,0,0.12),rgba(0,0,0,0.12))," + c;
+    el.classList.toggle("running", i.state === "running");
+    el.classList.toggle("waiting", i.state === "waiting");
+    if (i.state === "running") ensureMarquee(el);
+    el.querySelector(".status").textContent = (i.state || "unknown").toUpperCase();
+    var closeBtn = el.querySelector(".close");
+    if (closeBtn) closeBtn.style.display = isHideable(i.state) ? "flex" : "none";
+    var parentInst = i.parentID ? instancesBySid.get(i.parentID) : null;
+    var parentName = parentInst
+      ? (parentInst.sessionTitle || "session " + parentInst.sessionID.replace(/^session-/, "").slice(0, 8))
+      : (i.parentID ? "session " + i.parentID.replace(/^session-/, "").slice(0, 8) : null);
+    var sessTxt = (i.parentID ? "↳ " : "") + (i.sessionTitle
+      ? i.sessionTitle
+      : (i.sessionID ? "session " + i.sessionID.replace(/^session-/, "").slice(0, 8) : "session"));
+    var sessEl = el.querySelector(".sess");
+    sessEl.textContent = sessTxt;
+    var headEl = el.querySelector(".head");
+    var parentEl = headEl.querySelector(".parent");
+    if (parentName) {
+      if (!parentEl) {
+        parentEl = document.createElement("div");
+        parentEl.className = "parent";
+        parentEl.setAttribute("data-hint", "parent session — the session that spawned this sub-agent");
+        headEl.appendChild(parentEl);
+      }
+      parentEl.textContent = "parent: " + parentName;
+    } else if (parentEl) {
+      parentEl.remove();
+    }
+    var cwdEl = el.querySelector(".cpath");
+    cwdEl.textContent = i.cwd ? (i.branch ? i.cwd + " · " + i.branch : i.cwd) : "";
+    var line1 = [];
+    /* Context usage = the LAST request's prompt footprint (uncached input +
+       cache read from the newest measured request), not the session-cumulative
+       cache total — cumulative cache inflates the gauge (a 1M-token budget can
+       show 160%). If no per-request series is available, fall back to the
+       cumulative uncached-input share. */
+    var lastReqFootprint = null;
+    if (i.tokSeries && i.tokSeries.length) {
+      var lastPt = i.tokSeries[i.tokSeries.length - 1];
+      /* Total input for the request = uncached input + cache read (cache write
+         isn't folded per-request). This is the full prompt footprint, not just
+         the cache-miss length, matching the original's contextPct. */
+      lastReqFootprint = (lastPt[1] || 0) + (lastPt[4] || 0);
+    }
+    var ctxBase = lastReqFootprint != null ? lastReqFootprint : ((i.inputTokens || 0) + (i.cacheReadTokens || 0));
+    var contextPct = i.contextWindow ? Math.min(100, Math.round((ctxBase / i.contextWindow) * 100)) : null;
+    /* Context coloring, exactly like the original: red >50%, orange >20%, else none. */
+    var ctxColor = contextPct == null ? "" : (contextPct > 50 ? "#ff3b30" : contextPct > 20 ? "#ff9500" : "");
+    var ctxStyle = ctxColor ? ' style="color:' + ctxColor + ';font-weight:700"' : "";
+    line1.push(chip("turns " + (i.turns || 0) + " | steps " + (i.steps || 0),
+      "completed turns (turn/end) | executed steps (step/end)"));
+
+    /* Per-request figures = the CURRENT (last measured) request, like the
+       original: usage of the last request, not session-cumulative totals.
+       Last point of tokSeries = [time, input, output, reasoning, cacheRead]. */
+    var lastTok = i.tokSeries && i.tokSeries.length ? i.tokSeries[i.tokSeries.length - 1] : null;
+    var lastIn = lastTok ? (lastTok[1] || 0) : 0;      /* uncached input */
+    var lastOut = lastTok ? (lastTok[2] || 0) : (i.lastMessageOutputTokens || 0);
+    var lastReas = lastTok ? (lastTok[3] || 0) : 0;
+    var lastCache = lastTok ? (lastTok[4] || 0) : 0;   /* cache read */
+    /* Total input of the request = uncached + cache read: the number shown in
+       front of the context % must be the full input length, not the cache-miss
+       portion. */
+    var lastTotalIn = lastIn + lastCache;
+    var perReqTxt = '<span' + ctxStyle + ">" + fmt(lastTotalIn) + (contextPct != null ? " (" + contextPct + "%)" : "") + "</span> in | "
+      + fmt(lastOut) + " out | " + fmt(lastReas) + " reasoning";
+    line1.push(chip(perReqTxt,
+      "tokens used by the current (last) request — in: total prompt input (uncached + cache read; NN% = context-window usage) · out: model output · reasoning: thinking tokens"));
+
+    /* Session totals since this instance started, exactly like the original. */
+    line1.push(chip("total " + fmtInt(i.inputTokens) + "|" + fmtInt(i.outputTokens) + "|" + fmtInt(i.reasoningTokens || 0),
+      "session totals since this instance started — input | output | reasoning tokens"));
+
+    /* Prompt-cache hit rate — % of input served from cache · last request | session average. */
+    var cacheHit = null, cacheAvg = null;
+    if (lastTok) {
+      var lastBilled = lastIn + lastCache;
+      if (lastBilled > 0) cacheHit = Math.round((lastCache / lastBilled) * 100);
+    }
+    var cumIn = i.inputTokens || 0, cumCache = i.cacheReadTokens || 0;
+    if (cumIn + cumCache > 0) cacheAvg = Math.round((cumCache / (cumIn + cumCache)) * 100);
+    if (cacheHit != null || cacheAvg != null) {
+      var cacheTxtC = cacheHit != null ? cacheHit + "%" : "—";
+      var cacheAvgC = cacheAvg != null ? cacheAvg + "%" : "—";
+      /* Cache coloring, exactly like the original: green >90, blue >80, white >70,
+         orange >60, red otherwise. Same scale for the per-request hit and the average. */
+      var hitCol = cacheHit == null ? "" :
+        (cacheHit > 90 ? "#34c759" :
+         cacheHit > 80 ? "#3b82f6" :
+         cacheHit > 70 ? "#ffffff" :
+         cacheHit > 60 ? "#ff9500" : "#ff3b30");
+      var hitCls = hitCol ? ' style="color:' + hitCol + ';font-weight:700"' : "";
+      var avgCol = cacheAvg == null ? "" :
+        (cacheAvg > 90 ? "#34c759" :
+         cacheAvg > 80 ? "#3b82f6" :
+         cacheAvg > 70 ? "#ffffff" :
+         cacheAvg > 60 ? "#ff9500" : "#ff3b30");
+      var avgCls = avgCol ? ' style="color:' + avgCol + ';font-weight:700"' : "";
+      line1.push(chip('cache hit <span' + hitCls + ">" + cacheTxtC + "</span> | avg <span" + avgCls + ">" + cacheAvgC + "</span>",
+        "prompt-cache hit rate — % of input tokens served from cache · last request | session average"));
+    }
+
+    el.querySelector('.stats[data-line="1"]').innerHTML = line1.join("");
+    var line2 = [];
+    if (i.state === "waiting") {
+      line2.push('<span class="chip" style="color:#dbeafe;font-weight:700" data-hint="' +
+        esc("blocked on you — an approval request is parked") + '">waiting on you' +
+        (i.pendingApprovals > 1 ? " · " + i.pendingApprovals + " approvals" : "") + "</span>");
+    }
+    if (i.state === "error") {
+      line2.push('<span class="chip" style="color:#ffe4e0;font-weight:700" data-hint="' +
+        esc("last agent error from the live bus") + '">error: ' + esc(short(i.lastError, 90)) + "</span>");
+    }
+    if (i.parentID) {
+      line2.push('<span class="chip" style="color:#fbbf24;font-weight:700" data-hint="' +
+        esc("SUB — sub-agent session, spawned by the parent session via the task tool") + '">SUB</span>');
+    }
+    if (i.model) {
+      var mTxt = i.provider ? i.provider + "/" + i.model : i.model;
+      line2.push(chip(esc(mTxt),
+        "resolved model route — provider·model, from the latest request/context event"));
+    }
+    var rateTxt = null;
+    if (i.rateSeries && i.rateSeries.length) {
+      /* rateSeries points are [time, tokens, durationMs]; the per-request rate
+         is tokens / duration * 1000 — NOT the raw token count (that is what
+         made the chip read ~1376 t/s when the true rate was ~109 t/s). */
+      var lastPt = i.rateSeries[i.rateSeries.length - 1];
+      var lastRate = lastPt && lastPt[2] > 0 ? Math.round((lastPt[1] / lastPt[2]) * 1000) : 0;
+      var sumT = 0, sumD = 0;
+      for (var rt = 0; rt < i.rateSeries.length; rt++) { sumT += i.rateSeries[rt][1]; sumD += i.rateSeries[rt][2]; }
+      var avgRate = sumD > 0 ? Math.round((sumT / sumD) * 1000) : 0;
+      rateTxt = lastRate + " t/s | avg " + avgRate + "/s";
+    }
+    if (rateTxt && (i.outputTokens || i.reasoningTokens)) {
+      line2.push(chip(rateTxt,
+        "generation speed — tokens/s of the last request · session average (output + reasoning)"));
+    }
+    el.querySelector('.stats[data-line="2"]').innerHTML = line2.join("");
+    var graphsEl = el.querySelector(".graphs");
+    var rateEl = el.querySelector(".graph-rate");
+    var tokEl = el.querySelector(".graph-tok");
+    var rateSeries = i.rateSeries || [];
+    var tokSeries = i.tokSeries || [];
+    var l2El = el.querySelector('.stats[data-line="2"]');
+    var stEl = el.querySelector(".sound-toggle");
+    var gap = stEl.offsetTop - (l2El.offsetTop + l2El.offsetHeight);
+    var hasRate = rateSeries.length >= 2;
+    var hasTok = tokSeries.length >= 2;
+    if (gap >= 80 && (hasRate || hasTok)) {
+      graphsEl.style.display = "flex";
+      graphsEl.style.height = gap + "px";
+      void graphsEl.offsetHeight;
+      rateEl.style.display = hasRate ? "block" : "none";
+      tokEl.style.display = hasTok ? "block" : "none";
+      if (hasRate) drawGraph(rateEl, rateSeries);
+      if (hasTok) drawTokGraph(tokEl, tokSeries);
+    } else {
+      graphsEl.style.display = "none";
+    }
+    var now = Date.now();
+    /* Accumulated per-state time (stateMs) plus the live current-state tail. */
+    var sm = i.stateMs || {};
+    var live = i.state && i.stateSince ? Math.max(0, now - i.stateSince) : 0;
+    var runMs = (sm.running || 0) + (i.state === "running" ? live : 0);
+    var waitMs = (sm.waiting || 0) + (i.state === "waiting" ? live : 0);
+    var idleMs = (sm.idle || 0) + (i.state === "idle" ? live : 0);
+    var errMs = (sm.error || 0) + (i.state === "error" ? live : 0);
+    var parts = [];
+    if (runMs >= 1000) parts.push("run " + fmtDur(runMs));
+    if (waitMs >= 1000) parts.push("wait " + fmtDur(waitMs));
+    if (idleMs >= 1000) parts.push("idle " + fmtDur(idleMs));
+    if (errMs >= 1000) parts.push("err " + fmtDur(errMs));
+    var openMs = (i.sessionStart ? now - i.sessionStart : 0);
+    var meta = "dsh v" + (i.version || "0.1.0")
+      + (i.pid ? " · pid " + i.pid : "")
+      + " · " + (i.sessionID ? i.sessionID.replace(/^session-/, "").slice(0, 8) : "")
+      + " · open " + fmtDur(openMs) + (parts.length ? " (" + parts.join(" · ") + ")" : "")
+      + " · llm " + fmtDur(i.llmMs)
+      + " · started " + fmtClock(i.sessionStart);
+    el.querySelector(".meta").textContent = meta;
+  }
+  function render(d) {
+    var grid = document.getElementById("grid");
+    instancesBySid.clear();
+    for (var a = 0; a < d.instances.length; a++) {
+      var ii = d.instances[a];
+      if (ii.sessionID) instancesBySid.set(ii.sessionID, ii);
+    }
+    for (var b = 0; b < d.instances.length; b++) {
+      var inst = d.instances[b];
+      if (hiddenKeys.has(inst.sessionID) && !isHideable(inst.state)) hiddenKeys.delete(inst.sessionID);
+    }
+    saveHidden();
+    var visible = [];
+    for (var v = 0; v < d.instances.length; v++) {
+      var iv = d.instances[v];
+      if (!hiddenKeys.has(iv.sessionID)) visible.push(iv);
+    }
+    if (!visible.length) {
+      grid.innerHTML = '<div class="message">no sessions yet — start an agent turn and the cards appear here</div>';
+      for (var ck of cardEls.keys()) stopWaitLoop(ck);
+      cardEls.clear();
+      prevStates.clear();
+      return;
+    }
+    var n = visible.length;
+    var cols = gridCols(n);
+    var basis = "calc((100% - " + (cols - 1) * 4 + "px) / " + cols + ")";
+    grid.style.setProperty("--cols", String(cols));
+    var alive = new Set();
+    for (var av = 0; av < visible.length; av++) alive.add(visible[av].sessionID);
+    for (var dk of cardEls.keys()) {
+      if (!alive.has(dk)) {
+        stopWaitLoop(dk);
+        prevStates.delete(dk);
+        var deadEl = cardEls.get(dk);
+        if (deadEl) deadEl.remove();
+        cardEls.delete(dk);
+      }
+    }
+    var restoreEl = document.getElementById("restore");
+    restoreEl.textContent = hiddenKeys.size + " hidden — restore";
+    restoreEl.style.display = hiddenKeys.size ? "block" : "none";
+    for (var f = 0; f < visible.length; f++) {
+      var inst2 = visible[f];
+      var sid2 = inst2.sessionID;
+      var el2 = cardEls.get(sid2);
+      if (!el2) {
+        el2 = makeCard(inst2);
+        grid.appendChild(el2);
+      }
+      el2.style.flexBasis = basis;
+      updateCard(inst2);
+    }
+  }
+  function hideCard(sid) {
+    hiddenKeys.add(sid);
+    saveHidden();
+    var el = cardEls.get(sid);
+    if (el) {
+      stopWaitLoop(sid);
+      prevStates.delete(sid);
+      el.remove();
+      cardEls.delete(sid);
+    }
+  }
+  function restoreHidden() {
+    hiddenKeys.clear();
+    saveHidden();
+    document.getElementById("restore").style.display = "none";
+    refresh();
+  }
+  function saveHidden() {
+    try {
+      localStorage.setItem("sp-hidden", JSON.stringify(Array.from(hiddenKeys)));
+    } catch (e) {}
+  }
+  document.getElementById("restore").addEventListener("click", restoreHidden);
+  function refresh() {
+    fetch("/obvious-grid/status", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        render(d);
+      })
+      .catch(function () {
+        document.getElementById("grid").innerHTML = '<div class="message">no connection</div>';
+      });
+  }
+  var ntfyInput = document.getElementById("ntfyTopic");
+  var ntfySaveTimer = null;
+  function saveNotify(patch) {
+    fetch("/obvious-grid/notify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }).catch(function () {});
+  }
+  ntfyInput.addEventListener("input", function () {
+    clearTimeout(ntfySaveTimer);
+    ntfySaveTimer = setTimeout(function () { saveNotify({ topic: ntfyInput.value.trim() || null }); }, 600);
+  });
+  function syncNotify() {
+    fetch("/obvious-grid/notify", { cache: "no-store" })
+      .then(function (r) { return r.json(); })
+      .then(function (cfg) {
+        notifyCfg = cfg;
+        if (document.activeElement !== ntfyInput) ntfyInput.value = cfg.topic || "";
+        for (var s of cardEls.keys()) {
+          var nbox = cardEls.get(s).querySelector(".notify-box");
+          if (nbox) nbox.checked = notifyChecked(s);
+        }
+        refresh();
+      })
+      .catch(function () {});
+  }
+  var notifyHelp = document.getElementById("notifyHelp");
+  var notifyHelpDont = document.getElementById("notifyHelpDont");
+  function showNotifyHelp() {
+    notifyHelp.style.display = "flex";
+  }
+  function closeNotifyHelp() {
+    notifyHelp.style.display = "none";
+    if (notifyHelpDont.checked) {
+      try { localStorage.setItem("sp-notify-helped", "1"); } catch (e) {}
+    }
+  }
+  document.getElementById("notifyHelpOk").addEventListener("click", closeNotifyHelp);
+  notifyHelp.addEventListener("click", function (e) {
+    if (e.target === notifyHelp) closeNotifyHelp();
+  });
+  var hintEl = document.createElement("div");
+  hintEl.id = "hint";
+  hintEl.setAttribute("role", "tooltip");
+  document.body.appendChild(hintEl);
+  var graphTip = document.createElement("div");
+  graphTip.id = "graphTip";
+  graphTip.setAttribute("role", "tooltip");
+  document.body.appendChild(graphTip);
+  function showHint(text, x, y) {
+    hintEl.textContent = text;
+    hintEl.style.display = "block";
+    var r = hintEl.getBoundingClientRect();
+    var pad = 10;
+    var left = x + pad;
+    var top = y + pad;
+    if (left + r.width > innerWidth - pad) left = x - r.width - pad;
+    if (top + r.height > innerHeight - pad) top = y - r.height - pad;
+    hintEl.style.left = Math.max(pad, left) + "px";
+    hintEl.style.top = Math.max(pad, top) + "px";
+  }
+  document.addEventListener("mouseover", function (e) {
+    var t = e.target.closest ? e.target.closest("[data-hint]") : null;
+    if (t) showHint(t.dataset.hint, e.clientX, e.clientY);
+  });
+  document.addEventListener("mousemove", function (e) {
+    if (hintEl.style.display === "block") showHint(hintEl.textContent, e.clientX, e.clientY);
+  });
+  document.addEventListener("mouseout", function (e) {
+    var rt = e.relatedTarget;
+    if (rt && rt.closest && rt.closest("[data-hint]")) return;
+    hintEl.style.display = "none";
+  });
+  document.addEventListener("mouseleave", function () { hintEl.style.display = "none"; });
+  document.addEventListener("visibilitychange", function () {
+    if (document.hidden) return;
+    refresh();
+    if (!audioCtx || audioCtx.state === "closed") return;
+    for (var s of pendingSounds) {
+      var sid = s[0];
+      var kind = s[1];
+      pendingSounds.delete(sid);
+      if (kind === "idle") playIdleSound();
+      else startWaitLoop(sid);
+    }
+  });
+  refresh();
+  syncNotify();
+  setInterval(refresh, 2000);
+})();
+</script>
+</body>
+</html>
