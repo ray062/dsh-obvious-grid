@@ -83,7 +83,23 @@ the profile's own patch layer `$DSH_HOME/profiles/web/cordis.patch.yml` as an
 
 > Note for setups from before v0.2.0: if you previously registered the plugin by
 > hand via an `insert` row in your profile patch, remove that row after
-> upgrading to the bundle install — otherwise the plugin is registered twice.
+
+## Troubleshooting
+
+- **`file:` / tarball installs are snapshots, not live links.** pnpm copies the
+  package at install time, so after changing the source repo you must reinstall
+  (re-run `dsh plugin --profile web add file:/path/to/dsh-obvious-grid`) —
+  otherwise the installed copy silently keeps stale files. The npm-package
+  install (`dsh plugin --profile web add dsh-obvious-grid`) avoids this.
+- **Bundle not active after a `dsh plugin` command?** The reconciler maintains
+  `dsh.profile.bundles` from installed state — the entry is added when the
+  installed package declares `dsh.bundle`, and removed when it doesn't. If
+  your copy is stale (see above), the manifest may be missing: refresh the
+  install, then check `dsh.profile.bundles` in the profile's `package.json`
+  contains `dsh-obvious-grid`.
+- **Quick sanity check:** `/obvious-grid/status` must return JSON. If it
+  returns the SPA shell (DeepSeek Harness app HTML) instead, the plugin did not
+  register — check the two bullets above.
 
 ## Config
 

@@ -22,7 +22,7 @@
     "cordis.patch.yml"
   ],
   "scripts": {
-    "check": "node --check lib/index.js && node --check lib/sessions.js && node --check lib/notify.js && node scripts/check-page-script.mjs"
+    "check": "node --check lib/index.js && node --check lib/sessions.js && node --check lib/notify.js && node scripts/check-page-script.mjs && node scripts/check-version.mjs"
   },
   "keywords": [
     "deepseek-harness",
