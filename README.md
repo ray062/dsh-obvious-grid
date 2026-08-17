@@ -3,20 +3,65 @@
 **npm**: [dsh-obvious-grid](https://www.npmjs.com/package/dsh-obvious-grid) · **source**: [github.com/ray062/dsh-obvious-grid](https://github.com/ray062/dsh-obvious-grid)
 
 Host plugin for DeepSeek Harness: makes session status **obvious** — visible from
-across the room and reaching you when you are AFK. Port of the *idea* of
-[opencode-obvious-grid](https://github.com/ray062/opencode-obvious-grid) (its "HOW":
-an ambient glanceable grid + push/alarm on turn-finished / error / approval-wait),
-onto DSH's own seams instead of opencode hooks + temp files.
+across the room and reaching you when you are AFK. The harness itself serves an
+ambient, glanceable status grid at `/obvious-grid`, and the plugin pushes to
+**ntfy** (phone) and/or plays an **alarm** on the machine when a turn finishes,
+an error occurs, or an approval is waiting on you.
+
+## Install
+
+```bash
+dsh plugin --profile web add dsh-obvious-grid         # npm package name — resolved from the registry as-is
+dsh plugin --profile web add @deepseek-ai/schemastery # the plugin's config schema; an optional peer, so pnpm won't auto-install it
+dsh web   # restart, then open http://localhost:3080/obvious-grid
+```
+
+That's it — the package ships a `dsh.bundle` manifest (its own
+`cordis.patch.yml`), so `dsh plugin add` registers the plugin as a profile
+layer automatically: no manual patch editing, no config file. `dsh-obvious-grid`
+in the first command is the npm package name itself (published unscoped — see
+the npm link at the top), so a fresh install needs no scope or repo prefix:
+`dsh plugin` forwards the bare name to pnpm, which resolves it from the
+registry and adds it to the profile's `dependencies`; the reconciler then
+appends it to `dsh.profile.bundles` because the installed manifest declares
+`dsh.bundle`. The second line installs `@deepseek-ai/schemastery` as a plain
+dependency (it declares no `dsh.bundle`, hence the harmless "no dsh.bundle"
+warning) — it is required at boot because the plugin's entry imports it
+directly while declaring it only as an *optional* peer, and the web profile
+template sets `autoInstallPeers: false`. (`dsh plugin` forwards pnpm, which
+must be on PATH — it prints `dsh: pnpm not found on PATH` otherwise; for local
+development a tarball or `file:` path works the same way, e.g.
+`dsh plugin --profile web add file:/path/to/dsh-obvious-grid`.)
+
+## How to use
+
+1. Boot the harness: `dsh web` (or restart a running instance), then open
+   **http://localhost:3080/obvious-grid** — the grid fills the viewport and
+   updates itself; nothing to click to get started.
+2. Read each session at a glance: the card tint is the state — **orange**
+   running (scrolling RUNNING marquee), **blue** waiting on you, **red**
+   error, **green** idle — and the card shows title, workspace · git branch,
+   model/provider, tokens, context %, cache hit %, speed, and time breakdown.
+3. Per-card controls: **hide/restore** a card, and toggle that session's
+   **push** (ntfy) and **sound** (alarm) — or flip the global switch to opt
+   all sessions in.
+4. To be reached when AFK, give the plugin a **ntfy topic** and/or an **alarm
+   command** — set them on the page, or statically in your profile patch (see
+   "User-specific config" below). You are notified on exactly three triggers:
+   a turn finishing, an error, and an approval waiting on you.
+5. Sanity check: `GET /obvious-grid/status` must return JSON. If you get the
+   app's HTML shell instead, the plugin did not register — see Troubleshooting.
+
+![The ambient grid page](https://github.com/ray062/opencode-obvious-grid/blob/master/docs/obvious-grid-view.png)
 
 ## What you get
 
 - **Ambient grid page** served by the harness itself at `/obvious-grid` (web profile):
-  a fullscreen port of opencode-obvious-grid's UI — distance-readable cards that
-  fill the viewport, the whole card tinted by state: **orange = running** (with a
-  giant scrolling RUNNING marquee), **blue = waiting / blocked on you**
-  (flashing attention), **red = error**, **green = idle**. Cards show the
-  session title (folded from the log-only `session/title` event, seeded from
-  `ctx.sessionTitle` at adoption), workspace path · git branch (read from
+  distance-readable cards that fill the viewport, the whole card tinted by state:
+  **orange = running** (with a giant scrolling RUNNING marquee), **blue = waiting /
+  blocked on you** (flashing attention), **red = error**, **green = idle**. Cards
+  show the session title (folded from the log-only `session/title` event, seeded
+  from `ctx.sessionTitle` at adoption), workspace path · git branch (read from
   `.git/HEAD` up the directory tree), model/provider, per-request tokens
   (current request) + session totals, reasoning tokens (usage-reported when the
   adapter provides them, otherwise counted from the token-sized
@@ -46,29 +91,31 @@ onto DSH's own seams instead of opencode hooks + temp files.
 - **History resumes across restarts**: DSH never rebroadcasts constructor
   seeds (replay/fork/resume) on the `session/event` firehose, so the registry
   folds each session's full event log (`session.events`) once at adoption —
-  turns/steps/tokens/title from before a harness restart reappear, the
-  opencode-obvious-grid behavior. Live appends keep coming from the firehose,
-  and the two sources are disjoint (no double counting).
+  turns/steps/tokens/title from before a harness restart reappear. Live
+  appends keep coming from the firehose, and the two sources are disjoint (no
+  double counting).
 - **Nothing new to run**: no own HTTP server (routes register on the harness
   webserver), no temp-file registry, no PID liveness / staleness window. The
   page file is read fresh per request, so UI edits appear on a browser refresh
   without a harness restart.
 
-## Install
+## Config
 
-```bash
-dsh plugin --profile web add dsh-obvious-grid
-dsh plugin --profile web add @deepseek-ai/schemastery
-dsh web   # restart, then open http://localhost:3080/obvious-grid
-```
+| Key | Default | Meaning |
+|---|---|---|
+| `ntfyUrl` | `https://ntfy.sh` | ntfy server base |
+| `topic` | `""` | ntfy topic. Empty = push disabled (page can set it at runtime) |
+| `notifyOn` | `[turn-end, error, approval-wait]` | which triggers push |
+| `notifyDefault` | `false` | notify sessions that have no explicit per-session flag |
+| `alarmCmd` | `""` | optional alarm shell command; unset = silent |
+| `minIntervalMs` | `5000` | per-session push throttle |
+| `pageEnabled` | `true` | mount the `/obvious-grid` routes (web profile) |
 
-That's it — the package ships a `dsh.bundle` manifest (its own
-`cordis.patch.yml`), so `dsh plugin add` registers the plugin as a profile
-layer automatically: no manual patch editing, no config file. (`dsh plugin`
-forwards pnpm; for local development a tarball or `file:` path works the same
-way, e.g. `dsh plugin --profile web add file:/path/to/dsh-obvious-grid`.)
+Runtime user config (topic + per-session toggles) lives in
+`$DSH_HOME/obvious-grid.json` and is editable from the page
+(`POST /obvious-grid/notify`).
 
-### User-specific config (optional)
+## User-specific config (optional)
 
 Per-user settings — your ntfy `topic`, `alarmCmd`, push defaults — belong in
 the profile's own patch layer `$DSH_HOME/profiles/web/cordis.patch.yml` as an
@@ -88,6 +135,16 @@ the profile's own patch layer `$DSH_HOME/profiles/web/cordis.patch.yml` as an
 
 > Note for setups from before v0.2.0: if you previously registered the plugin by
 > hand via an `insert` row in your profile patch, remove that row after
+> upgrading — it duplicates the bundle's own insert.
+
+## Endpoints (web profile)
+
+| Route | Description |
+|---|---|
+| `GET /obvious-grid` | the ambient page (plain HTML file, zero build) |
+| `GET /obvious-grid/status` | JSON snapshot of live sessions |
+| `GET /obvious-grid/notify` | current topic + per-session flags |
+| `POST /obvious-grid/notify` | set topic and/or toggle one session |
 
 ## Troubleshooting
 
@@ -106,31 +163,6 @@ the profile's own patch layer `$DSH_HOME/profiles/web/cordis.patch.yml` as an
   returns the SPA shell (DeepSeek Harness app HTML) instead, the plugin did not
   register — check the two bullets above.
 
-## Config
-
-| Key | Default | Meaning |
-|---|---|---|
-| `ntfyUrl` | `https://ntfy.sh` | ntfy server base |
-| `topic` | `""` | ntfy topic. Empty = push disabled (page can set it at runtime) |
-| `notifyOn` | `[turn-end, error, approval-wait]` | which triggers push |
-| `notifyDefault` | `false` | notify sessions that have no explicit per-session flag |
-| `alarmCmd` | `""` | optional alarm shell command; unset = silent |
-| `minIntervalMs` | `5000` | per-session push throttle |
-| `pageEnabled` | `true` | mount the `/obvious-grid` routes (web profile) |
-
-Runtime user config (topic + per-session toggles) lives in
-`$DSH_HOME/obvious-grid.json` and is editable from the page
-(`POST /obvious-grid/notify`).
-
-## Endpoints (web profile)
-
-| Route | Description |
-|---|---|
-| `GET /obvious-grid` | the ambient page (plain HTML file, zero build) |
-| `GET /obvious-grid/status` | JSON snapshot of live sessions |
-| `GET /obvious-grid/notify` | current topic + per-session flags |
-| `POST /obvious-grid/notify` | set topic and/or toggle one session |
-
 ## Files
 
 ```
@@ -147,7 +179,7 @@ dsh-obvious-grid/
                                 exercise several cards without touching a live instance
 ```
 
-## Safety rules (kept from the original plugin)
+## Safety rules
 
 1. No top-level side effects; `apply(ctx, config)` does all wiring.
 2. `fetch` is always bounded (AbortController, 3 s); the alarm subprocess is
@@ -157,6 +189,14 @@ dsh-obvious-grid/
 4. `lib/page.html` is a plain file — no template processing. The embedded script
    uses only string concatenation (no template literals), and `npm run check`
    syntax-checks it.
+
+## Limits
+
+- Cards show tokens and wall times, not **$** — DSH does not report message
+  cost today. If providers expose usage cost later, it drops into the same fold.
+- The grid shows the serving instance's live sessions. A machine-wide grid over
+  several concurrent `dsh` processes would scan the shared canonical logs under
+  `$DSH_HOME` — deliberately deferred.
 
 ## Verify
 
@@ -176,19 +216,6 @@ multi-session grid (parent + sub-agent + second session, waiting + idle states)
 is exercised by `scripts/seeder.mjs` in an isolated profile. A load failure
 still surfaces in the Loader log; the Logger row message names the missing
 export, schema field, or service.
-
-## Differences vs opencode-obvious-grid
-
-- Data source: DSH session firehose (`session/event`) instead of opencode hooks;
-  no temp state files, PID liveness, or staleness window.
-- Server: routes on `ctx.webServer` instead of a plug-in-owned port + takeover;
-  no platform player discovery (`powershell/afplay/paplay`) — `alarmCmd` is the
-  user's own shell command.
-- Cost: DSH reports no message cost today, so cards show tokens + wall times
-  instead of $. If providers expose usage cost later, it drops into the same fold.
-- Fleet: v1 shows the serving instance's live sessions. A machine-wide grid over
-  several concurrent `dsh` processes would scan the shared canonical logs under
-  `$DSH_HOME` — the open 20%, deliberately deferred.
 
 ## License
 
