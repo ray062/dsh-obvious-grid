@@ -1,7 +1,5 @@
 # dsh-obvious-grid
 
-**npm**: [dsh-obvious-grid](https://www.npmjs.com/package/dsh-obvious-grid) · **source**: [github.com/ray062/dsh-obvious-grid](https://github.com/ray062/dsh-obvious-grid)
-
 Host plugin for DeepSeek Harness: makes session status **obvious** — visible from
 across the room and reaching you when you are AFK. The harness itself serves an
 ambient, glanceable status grid at `/obvious-grid`, and the plugin pushes to
@@ -19,8 +17,8 @@ dsh web   # restart, then open http://localhost:3080/obvious-grid
 That's it — the package ships a `dsh.bundle` manifest (its own
 `cordis.patch.yml`), so `dsh plugin add` registers the plugin as a profile
 layer automatically: no manual patch editing, no config file. `dsh-obvious-grid`
-in the first command is the npm package name itself (published unscoped — see
-the npm link at the top), so a fresh install needs no scope or repo prefix:
+in the first command is the npm package name itself (published unscoped on
+npmjs.com), so a fresh install needs no scope or repo prefix:
 `dsh plugin` forwards the bare name to pnpm, which resolves it from the
 registry and adds it to the profile's `dependencies`; the reconciler then
 appends it to `dsh.profile.bundles` because the installed manifest declares
